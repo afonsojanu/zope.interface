@@ -12,6 +12,20 @@ Change log
   callers as ``SystemError`` instead of ``AttributeError``.
   See `issue 359 <https://github.com/zopefoundation/zope.interface/issues/359>`_.
 
+- Fix two more spots in the same functions touched above:
+  ``SpecificationBase.isOrExtends`` and ``InterfaceBase.__adapt__`` would
+  segfault, rather than raise ``TypeError``, if ``_implied`` had been set
+  to something other than a dict. Both call sites now go through a shared
+  check that validates ``_implied`` is actually a dict before handing it
+  to ``PyDict_Contains``.
+
+- Fix ``InterfaceBase.__eq__``/``__lt__``/etc. (``IB_richcompare`` in the
+  C optimizations) raising ``SystemError`` instead of ``AttributeError``
+  when either interface being compared had an unset ``__name__`` or
+  ``__module__``, e.g. via ``InterfaceBase.__new__(InterfaceBase)``. This
+  is the same NULL-without-exception bug fixed elsewhere in this release;
+  ``__hash__`` already guarded these same two attributes.
+
 - Fix free-threaded (no-GIL) data races in the C lookup caches.  Concurrent
   ``lookup()`` and ``changed()`` calls could crash while cache fields were
   being replaced.  Their lifetimes are now guarded by a critical section on

@@ -329,6 +329,26 @@ SB_dealloc(SB* self)
 #endif
 }
 
+/*
+ * _implied is a writable member, so nothing stops user code from
+ * setting it to something other than a dict. Check for that here
+ * rather than letting PyDict_Contains() loose on arbitrary objects,
+ * which can crash outright instead of raising.
+ */
+static PyObject*
+_SB_get_implied_dict(PyObject* implied)
+{
+    if (implied == NULL) {
+        PyErr_SetString(PyExc_AttributeError, "_implied");
+        return NULL;
+    }
+    if (!PyDict_Check(implied)) {
+        PyErr_SetString(PyExc_TypeError, "_implied must be a dict");
+        return NULL;
+    }
+    return implied;
+}
+
 static char SB_extends__doc__[] =
   "Test whether a specification is or extends another";
 
@@ -338,11 +358,9 @@ SB_extends(SB* self, PyObject* other)
     PyObject* implied;
     int contains;
 
-    implied = self->_implied;
-    if (implied == NULL) {
-        PyErr_SetString(PyExc_AttributeError, "_implied");
+    implied = _SB_get_implied_dict(self->_implied);
+    if (implied == NULL)
         return NULL;
-    }
 
     contains = PyDict_Contains(implied, other);
     if (contains < 0)
@@ -807,9 +825,8 @@ IB__adapt__(PyObject* self, PyObject* obj)
     if (PyObject_TypeCheck(decl, specification_base_class)) {
         PyObject* implied;
 
-        implied = ((SB*)decl)->_implied;
+        implied = _SB_get_implied_dict(((SB*)decl)->_implied);
         if (implied == NULL) {
-            PyErr_SetString(PyExc_AttributeError, "_implied");
             Py_DECREF(decl);
             return NULL;
         }
@@ -1028,6 +1045,15 @@ IB_richcompare(IB* self, PyObject* other, int op)
         }
     }
 
+    if (!self->__module__) {
+        PyErr_SetString(PyExc_AttributeError, "__module__");
+        return NULL;
+    }
+    if (!self->__name__) {
+        PyErr_SetString(PyExc_AttributeError, "__name__");
+        return NULL;
+    }
+
     interface_base_class = _get_interface_base_class(Py_TYPE(self));
     if (interface_base_class == NULL) {
         oresult = Py_NotImplemented;
@@ -1040,6 +1066,14 @@ IB_richcompare(IB* self, PyObject* other, int op)
         otherib = (IB*)other;
         othername = otherib->__name__;
         othermod = otherib->__module__;
+        if (!othername) {
+            PyErr_SetString(PyExc_AttributeError, "__name__");
+            return NULL;
+        }
+        if (!othermod) {
+            PyErr_SetString(PyExc_AttributeError, "__module__");
+            return NULL;
+        }
     } else {
         othername = PyObject_GetAttr(other, str__name__);
         if (othername) {
